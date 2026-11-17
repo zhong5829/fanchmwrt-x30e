@@ -10,7 +10,7 @@
 | 默认分支 | `fanchmwrt-25.12.6`，内核 **6.12**，`version` = r33311 |
 | 官方是否支持 X30E | **不支持**。`target/linux/mediatek/image/filogic.mk` 里只有 `ruijie_rg-x60-pro`（MT7986） |
 | OpenWrt 主线是否支持 | **也不支持**。master / 24.10 / 25.12 三个分支都只有 `ruijie_rg-x60-pro` |
-| X30E 的现成移植来源 | `RuijieNetworksCommunity/MT798X-6.6-24.10`（smaster 分支，kernel 6.6） |
+| X30E 的现成移植来源 | `RuijieNetworksCommunity/MT798X-6.6-24.10`（默认分支 `mt798x-mt799x-6.6-mtwifi`，kernel 6.6） |
 
 所以「编译」这个任务 99% 的工作量是**把机型支持移植进 25.12 的树**，剩下的才是 `make`。本目录就是把这套移植和云编译流水线做好。
 
@@ -116,7 +116,7 @@ sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g
 git clone --depth 1 -b fanchmwrt-25.12.6 https://github.com/fanchmwrt/fanchmwrt openwrt
 python3 apply-port.py openwrt
 cd openwrt
-sed "s/DEVICE_ruijie_rg-x30e-stock/DEVICE_ruijie_rg-x30e-stock/" ../configs/target.config >> .config
+cat ../configs/target.config >> .config
 make defconfig
 cat ../configs/packages.config >> .config
 make defconfig
