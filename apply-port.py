@@ -11,6 +11,7 @@
 """
 
 import os
+import re
 import shutil
 import sys
 
@@ -186,6 +187,24 @@ def main():
         "ruijie,rg-x30e-firmware2)\n\t\t# tar magic",
         label="target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh",
     )
+
+    print("== 7/7 默认 LAN 网段 ==")
+    # 上游默认 192.168.1.1，与国内光猫常用网段冲突，改为 192.168.110.1
+    cg = os.path.join(root, "package/base-files/files/bin/config_generate")
+    text = read(cg)
+    if 'ipad=${ipaddr:-"192.168.110.1"}' in text:
+        print("  [skip] %s（已是 192.168.110.1）" % os.path.relpath(cg))
+    else:
+        text, hits = re.subn(
+            r'lan\) ipad=\$\{ipaddr:-"192\.168\.1\.1"\}',
+            'lan) ipad=${ipaddr:-"192.168.110.1"}',
+            text,
+        )
+        if hits != 1:
+            fail("config_generate 中默认 LAN IP 锚点命中 %d 次（应为 1），"
+                 "上游结构可能已变，请人工确认。" % hits)
+        write(cg, text)
+        print("  [ok]   %s" % os.path.relpath(cg))
 
     print("\n移植完成。自查命令：")
     print("  grep -n 'ruijie_rg-x30e' target/linux/mediatek/image/filogic.mk")
