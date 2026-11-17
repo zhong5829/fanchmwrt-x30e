@@ -1,0 +1,2 @@
+# 统一用 LF，避免在 Windows 上编辑后提交 CRLF 导致 Linux 侧脚本无法执行
+* text=auto eol=lf
