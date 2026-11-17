@@ -73,12 +73,17 @@ jobs:
           set -e
           sed "s/DEVICE_ruijie_rg-x30e-stock/DEVICE_${DEVICE}/" ../configs/target.config >> .config
           make defconfig
-          grep -q "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE}=y" .config \
+          echo "=== 目标选择（应为 mediatek / filogic / ${DEVICE}）==="
+          grep -E '^CONFIG_TARGET' .config
+          grep -q "CONFIG_TARGET_mediatek_filogic_DEVICE_${DEVICE}=y" .config \
             || { echo "机型符号未生效，检查 profile 名是否正确"; exit 1; }
           cat ../configs/packages.config >> .config
           make defconfig
           echo "=== 关键选项 ==="
-          grep -E "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE}=|CONFIG_PACKAGE_(fwxd|kmod-fwx|luci-app-fwx-dashboard|luci-theme-fanchmwrt|shortcut-fe)=" .config
+          grep -E "CONFIG_TARGET_mediatek_filogic_DEVICE_${DEVICE}=|CONFIG_PACKAGE_(fwxd|kmod-fwx|luci-app-fwx-dashboard|luci-theme-fanchmwrt|shortcut-fe)=" .config
+          for p in fwxd kmod-fwx luci-app-fwx-dashboard luci-app-fwx-app-center luci-theme-fanchmwrt; do
+            grep -q "CONFIG_PACKAGE_${p}=y" .config || { echo "缺少核心包：${p}（包名或依赖有误）"; exit 1; }
+          done
 
       - name: 下载软件源码包
         working-directory: openwrt
