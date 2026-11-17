@@ -1,0 +1,107 @@
+name: build-fanchmwrt-x30e
+
+# 手动触发：Actions 页面点 Run workflow。
+# 首次全量编译在 GitHub 4 核 runner 上约 2~4 小时（含工具链）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: 'fanchmwrt 分支或 commit'
+        required: true
+        default: 'fanchmwrt-25.12.6'
+      device:
+        description: '机型 profile（默认原厂分区布局，最安全）'
+        required: true
+        type: choice
+        default: 'ruijie_rg-x30e-stock'
+        options:
+          - ruijie_rg-x30e-stock
+          - ruijie_rg-x30e-firmware2
+          - ruijie_rg-x30e
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 350
+
+    steps:
+      - name: 释放 runner 磁盘空间
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -a -f || true
+          df -h /
+
+      - name: 安装编译依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install build-essential clang flex bison g++ gawk \
+            gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
+            python3-distutils rsync unzip zlib1g-dev file wget ccache
+
+      - name: 检出本仓库（补丁 + 配置）
+        uses: actions/checkout@v4
+
+      - name: 拉取 fanchmwrt 源码
+        run: |
+          git clone --depth 1 -b "${{ inputs.upstream_ref }}" \
+            https://github.com/fanchmwrt/fanchmwrt openwrt
+          git -C openwrt log -1 --format='%H %s'
+
+      - name: 打锐捷 RG-X30E 机型补丁
+        run: |
+          python3 apply-port.py openwrt
+          echo "--- filogic.mk 中的 X30E 定义 ---"
+          grep -n 'Device/ruijie_rg-x30e' openwrt/target/linux/mediatek/image/filogic.mk
+          echo "--- base-files 中的机型引用 ---"
+          grep -rn 'ruijie,rg-x30e' openwrt/target/linux/mediatek/filogic/base-files/
+
+      - name: 更新并安装 feeds
+        working-directory: openwrt
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: 生成 .config
+        working-directory: openwrt
+        env:
+          DEVICE: ${{ inputs.device }}
+        run: |
+          set -e
+          sed "s/DEVICE_ruijie_rg-x30e-stock/DEVICE_${DEVICE}/" ../configs/target.config >> .config
+          make defconfig
+          grep -q "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE}=y" .config \
+            || { echo "机型符号未生效，检查 profile 名是否正确"; exit 1; }
+          cat ../configs/packages.config >> .config
+          make defconfig
+          echo "=== 关键选项 ==="
+          grep -E "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE}=|CONFIG_PACKAGE_(fwxd|kmod-fwx|luci-app-fwx-dashboard|luci-theme-fanchmwrt|shortcut-fe)=" .config
+
+      - name: 下载软件源码包
+        working-directory: openwrt
+        run: make download -j8 || make download -j1 V=s
+
+      - name: 编译固件
+        working-directory: openwrt
+        run: make -j"$(nproc)" || make -j1 V=s
+
+      - name: 显示产物
+        working-directory: openwrt
+        run: |
+          ls -lh bin/targets/mediatek/filogic/
+          cd bin/targets/mediatek/filogic/ && sha256sum * 2>/dev/null | tee SHA256.txt || true
+
+      - name: 上传固件
+        uses: actions/upload-artifact@v4
+        with:
+          name: fanchmwrt-${{ inputs.device }}-${{ inputs.upstream_ref }}
+          path: |
+            openwrt/bin/targets/mediatek/filogic/*.bin
+            openwrt/bin/targets/mediatek/filogic/*.itb
+            openwrt/bin/targets/mediatek/filogic/sha256sums
+            openwrt/bin/targets/mediatek/filogic/profiles.json
+          if-no-files-found: error
+          retention-days: 14

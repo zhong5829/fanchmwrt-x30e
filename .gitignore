@@ -1,0 +1,7 @@
+# 编译产物与本地临时目录（源码树不纳入本仓库）
+openwrt/
+work/
+*.bin
+*.itb
+*.ipk
+*.log
